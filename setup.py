@@ -1,34 +1,47 @@
+#!/usr/bin/env python3
+"""
+ML-Enhanced Document Scanner setup script
+"""
+
 from setuptools import setup, find_packages
+import os
 
-# Read the content of README.md
-with open("README.md", "r", encoding="utf-8") as fh:
-    long_description = fh.read()
+# Read requirements
+with open('requirements.txt') as f:
+    requirements = f.read().splitlines()
 
-# Read requirements from requirements.txt
-with open("requirements.txt", "r", encoding="utf-8") as fh:
-    requirements = fh.read().splitlines()
+# Read README for long description
+with open('README.md', encoding='utf-8') as f:
+    long_description = f.read()
 
 setup(
-    name="doc-scanner",
-    version="0.1.0",
+    name="ml-doc-scanner",
+    version="1.0.0",
     author="Your Name",
     author_email="your.email@example.com",
-    description="A document scanner application using your camera",
+    description="A machine learning-powered document scanner with OCR and analysis capabilities",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/doc-scanner",
+    url="https://github.com/yourusername/ml-document-scanner",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
-        "Operating System :: MacOS :: MacOS X",
+        "Operating System :: OS Independent",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
+        "Topic :: Scientific/Engineering :: Image Processing",
     ],
     python_requires=">=3.8",
     install_requires=requirements,
     entry_points={
         "console_scripts": [
-            "doc-scanner=doc_scanner.scanner:main",
-            "advanced-scanner=scripts.advanced_scanner:main",
+            "doc-scanner=scripts.advanced_scanner:main",
+            "simple-scanner=scripts.simple_scanner:main",
+            "doc-scanner-demo=scripts.quick_demo:main",
         ],
+    },
+    include_package_data=True,
+    package_data={
+        '': ['*.md'],
     },
 )

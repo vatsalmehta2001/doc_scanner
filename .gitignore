@@ -23,6 +23,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # PyInstaller
 *.manifest
@@ -35,6 +36,7 @@ pip-delete-this-directory.txt
 # Unit test / coverage reports
 htmlcov/
 .tox/
+.nox/
 .coverage
 .coverage.*
 .cache
@@ -106,40 +108,52 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
-# VS Code settings
-.vscode/
+# Pyre type checker
+.pyre/
 
-# macOS specific files
+# VSCode
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+.idea_modules/
+
+# macOS
 .DS_Store
 .AppleDouble
 .LSOverride
 ._*
 
-# Scanned documents output folder
+# Project specific
 scans/
+*.jpg
+*.png
+*.tif
+*.tiff
+*.bmp
+*.gif
+*.weights
+*.onnx
+*.pt
+*.pth
+*.h5
+*.pb
+*.pkl
+*.hdf5
+!docs/*.jpg
+!docs/*.png
+!train_data/**/*.jpg
+!train_data/**/*.png
 
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+# Tesseract related
+tessdata/
 
-# Distribution / packaging
-dist/
-build/
-*.egg-info/
+# Logs
+logs/
+*.log
 
-# Virtual environments
-venv/
-env/
-.env/
-
-# IDE files
-.vscode/
-.idea/
-
-# macOS files
-.DS_Store
-
-# Scan output files (optional, depending on whether you want to track them)
-scans/*.jpg
-scans/*.txt
+# Model checkpoints
+checkpoints/

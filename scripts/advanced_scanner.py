@@ -141,7 +141,7 @@ def detect_document(image, sensitivity=0.7):
                 # Find the minimum area rectangle
                 rect = cv2.minAreaRect(contour)
                 box = cv2.boxPoints(rect)
-                box = np.int0(box)
+                box = np.array(box, dtype=np.int32)
                 approx = box
             
             # If we have 4 points (or approximated to 4), we likely have found our document
