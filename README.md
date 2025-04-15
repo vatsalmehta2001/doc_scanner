@@ -1,129 +1,104 @@
-# Document Scanner
+Let's build your portfolio-ready project one file at a time, starting with the most important components. I'll guide you through each step to enhance your document scanner with machine learning features.
 
-A lightweight Python application that uses your MacBook's built-in camera to scan documents in real-time. Optimized for Apple Silicon Macs (M-series chips) and macOS Sonoma.
+## Step 1: Create a Professional README.md
+
+Let's begin with a comprehensive README that showcases your project:
+
+```markdown
+# ML-Enhanced Document Scanner
+
+A machine learning-powered document scanner that uses computer vision and OCR to detect, capture, enhance, and extract text from physical documents using a webcam.
+
+![Document Scanner Demo](docs/demo_screenshot.png)
 
 ## Features
 
-- Minimal and fast with few dependencies
-- Real-time document detection using edge detection
-- Green rectangle overlay around detected documents
-- Save scanned documents as JPEG images
-- Compatible with Apple Silicon (M-series chips)
-- Optimized for use with VS Code's integrated terminal
+- **Intelligent Document Detection**: Automatically identifies and captures documents in real-time
+- **ML-Based Document Classification**: Identifies document types (text document, ID card, receipt, etc.)
+- **Advanced OCR Processing**: Extracts text even from challenging documents with dark backgrounds
+- **Multiple Enhancement Modes**: Optimizes images for different document types
+- **Perspective Correction**: Automatically straightens and crops documents
+- **Real-time Text Extraction**: Copies detected text to clipboard
+- **Optimized for Apple Silicon**: Fully compatible with M-series Macs
 
-## Requirements
+## Demo
 
-- Python 3.8 or higher
-- macOS (optimized for Sonoma and Apple Silicon, but works on Intel Macs too)
-- Built-in or external camera
+[View Demo Video](https://example.com/demo-video)
 
 ## Installation
 
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/yourusername/doc-scanner.git
-   cd doc-scanner
-   ```
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/ml-document-scanner.git
+cd ml-document-scanner
 
-2. Create and activate a virtual environment (recommended):
-   ```bash
-   python -m venv venv
-   source venv/bin/activate
-   ```
+# Install dependencies
+pip install -r requirements.txt
 
-3. Install the package:
-   ```bash
-   pip install -e .
-   ```
-
-   For Apple Silicon Macs, if you encounter issues, try:
-   ```bash
-   pip install --no-binary :all: -e .
-   ```
+# Install Tesseract OCR engine (required for text extraction)
+# macOS:
+brew install tesseract
+# Ubuntu:
+# sudo apt install tesseract-ocr
+```
 
 ## Usage
 
-### Command Line
-
-Run the document scanner from the command line:
-
 ```bash
-doc-scanner
+# Run the advanced scanner with ML features
+python advanced_scanner.py
+
+# Run the simple version for quick document scans
+python simple_scanner.py
 ```
-
-Or with custom options:
-
-```bash
-doc-scanner --output scan_results --camera 1 --width 1920 --height 1080
-```
-
-### Options
-
-- `--output`, `-o`: Directory to save scanned documents (default: `scans`)
-- `--camera`, `-c`: Camera index (default: 0 for built-in camera)
-- `--width`, `-W`: Camera width resolution (default: 1280)
-- `--height`, `-H`: Camera height resolution (default: 720)
 
 ### Controls
 
-- `s`: Save the current document as a JPEG image
-- `q`: Quit the application
+- **s**: Save document and extract text
+- **e**: Toggle enhancement modes
+- **c**: Toggle document classification
+- **m**: Toggle manual capture mode
+- **+/-**: Adjust detection sensitivity
+- **q**: Quit
 
-## Troubleshooting
+## Project Structure
 
-### Camera Permissions on macOS
-
-1. Go to System Settings (or System Preferences) > Privacy & Security > Camera
-2. Make sure Terminal, VS Code, and/or your Python environment have permission to use the camera
-3. If they don't appear in the list, you may need to run the app once, then grant permission when prompted
-4. If still not working, try adding the application manually or restart your computer
-
-### Apple Silicon (M-series) Compatibility
-
-1. Make sure you're using Python for Apple Silicon (arm64):
-   ```bash
-   python -c "import platform; print(platform.machine())"
-   ```
-   This should output `arm64`.
-
-2. If you experience issues with OpenCV or lite-camera:
-   - Try reinstalling with the `--no-binary` flag:
-     ```bash
-     pip uninstall opencv-python lite-camera
-     pip install --no-binary :all: opencv-python lite-camera
-     ```
-   - Make sure you're using native arm64 builds of libraries
-
-3. If using Rosetta 2, try switching to a native arm64 Python distribution
-
-### Common Issues
-
-- **Black screen**: Check camera permissions
-- **Slow performance**: Try reducing resolution with `--width` and `--height` options
-- **Camera not found**: Verify the camera index with `--camera` option (try 0, 1, etc.)
-
-## Development
-
-### Running Tests
-
-```bash
-python -m unittest discover tests
+```
+├── models/              # ML models for document analysis
+├── doc_scanner/         # Core scanner functionality
+├── notebooks/           # Jupyter notebooks for analysis
+├── demo/                # Demo files and examples
+├── docs/                # Documentation
+└── tests/               # Test suite
 ```
 
-### Project Structure
+## Technical Overview
 
-- `doc_scanner/`: Main package
-  - `scanner.py`: Main application code
-  - `document.py`: Document detection logic
-  - `utils.py`: Utility functions
-- `tests/`: Test files
-- `requirements.txt`: Dependencies
-- `setup.py`: Package configuration
+This project combines classical computer vision techniques with machine learning to create a powerful document processing pipeline:
+
+1. **Document Detection**: Adaptive edge detection and contour analysis
+2. **Image Enhancement**: Specialized processing for various document types
+3. **Text Extraction**: Multi-stage OCR with preprocessing optimizations
+4. **Document Classification**: ML model to identify document types
+5. **Text Analysis**: Extract structured information from document text
+
+## ML Components
+
+- Document type classifier (CNN-based)
+- Image quality enhancement model
+- Text structure analyzer
+
+## Technology Stack
+
+- Python 3.8+
+- OpenCV for computer vision
+- Tesseract for OCR
+- TensorFlow/Keras for ML models
+- NumPy and SciPy for numerical processing
+- Matplotlib for visualization
 
 ## License
 
-MIT License
+MIT
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+## Author

@@ -117,3 +117,29 @@ dmypy.json
 
 # Scanned documents output folder
 scans/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+venv/
+env/
+.env/
+
+# IDE files
+.vscode/
+.idea/
+
+# macOS files
+.DS_Store
+
+# Scan output files (optional, depending on whether you want to track them)
+scans/*.jpg
+scans/*.txt

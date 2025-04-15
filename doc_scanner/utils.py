@@ -7,6 +7,7 @@ import sys
 import platform
 import subprocess
 
+
 def ensure_directory(directory):
     """
     Create the specified directory if it doesn't exist
@@ -15,6 +16,7 @@ def ensure_directory(directory):
         directory: Path to the directory to create
     """
     os.makedirs(directory, exist_ok=True)
+
 
 def get_system_info():
     """
@@ -26,66 +28,71 @@ def get_system_info():
     info = {
         "platform": platform.platform(),
         "python_version": platform.python_version(),
-        "architecture": platform.machine()
+        "architecture": platform.machine(),
+        "system": platform.system()
     }
     
     # Check if running on Apple Silicon
-    if info["architecture"] == "arm64" and "macOS" in info["platform"]:
+    if info["architecture"] == "arm64" and info["system"] == "Darwin":
         info["is_apple_silicon"] = True
     else:
         info["is_apple_silicon"] = False
     
     return info
 
-def check_camera_permission():
+
+def check_opencv_version():
     """
-    Check if camera permission is granted on macOS
+    Check OpenCV version and compatibility
     
     Returns:
-        bool: True if camera permission appears to be granted, False otherwise
+        tuple: (version_string, is_compatible)
     """
-    if platform.system() != "Darwin":  # Not macOS
-        return True
-    
     try:
-        # Use tccutil to check camera permissions (requires admin)
-        result = subprocess.run(
-            ["tccutil", "status", "Camera"],
-            capture_output=True,
-            text=True
-        )
+        import cv2
+        version = cv2.__version__
         
-        if "DENIED" in result.stdout:
-            return False
-        return True
-    except (subprocess.SubprocessError, FileNotFoundError):
-        # If we can't check, assume it might be an issue
-        return None
+        # Check if version is at least 4.5 (good for Apple Silicon)
+        major, minor, _ = version.split(".", 2)
+        is_compatible = (int(major) > 4 or (int(major) == 4 and int(minor) >= 5))
+        
+        return version, is_compatible
+    except ImportError:
+        return "Not installed", False
+    except Exception:
+        return "Unknown", False
+
 
 def display_apple_silicon_tips():
     """Display tips for running on Apple Silicon Macs"""
     info = get_system_info()
     
     if info["is_apple_silicon"]:
-        print("\nApple Silicon (M-series) compatibility tips:")
+        cv_version, cv_compatible = check_opencv_version()
+        
+        print("\nApple Silicon (M-series) Compatibility Info:")
         print("-------------------------------------------")
-        print("1. Ensure you're using Python for Apple Silicon (arm64)")
-        print(f"   Current Python architecture: {info['architecture']}")
-        print("2. Install packages with pip using the '--no-binary' flag if needed")
-        print("   Example: pip install --no-binary :all: opencv-python")
-        print("3. For OpenCV, the arm64 build is recommended")
-        print("4. Make sure lite-camera is compatible with Apple Silicon")
-        print("   If issues occur, contact the package maintainer")
+        print(f"• System: {info['platform']}")
+        print(f"• Python version: {info['python_version']}")
+        print(f"• Architecture: {info['architecture']}")
+        print(f"• OpenCV version: {cv_version}")
+        print(f"• OpenCV compatibility: {'Good' if cv_compatible else 'May need update'}")
+        
+        if not cv_compatible:
+            print("\nTip: For better performance on Apple Silicon, install the latest OpenCV:")
+            print("  pip uninstall opencv-python -y")
+            print("  pip install --no-binary :all: opencv-python")
     
     return info["is_apple_silicon"]
+
 
 def display_macos_camera_permission_help():
     """Display help for macOS camera permissions"""
     if platform.system() == "Darwin":  # macOS
         print("\nCamera Permission Guide for macOS:")
         print("--------------------------------")
-        print("1. Open System Settings (or System Preferences)")
-        print("2. Navigate to Privacy & Security > Camera")
-        print("3. Ensure that Terminal, VS Code, and/or your Python environment have permission")
-        print("4. If needed, add the application manually and restart it")
-        print("5. You might need to run the app once, deny permission, then grant it")
+        print("1. Open System Settings > Privacy & Security > Camera")
+        print("2. Ensure Terminal, VS Code, and/or your Python environment have permission")
+        print("3. After granting permission, restart your terminal or VS Code")
+        print("4. If issues persist, try running the app from Terminal directly:")
+        print("   python -m doc_scanner.scanner")
