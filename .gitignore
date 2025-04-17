@@ -1,4 +1,4 @@
-# Byte-compiled / optimized / DLL files
+# Python bytecode
 __pycache__/
 *.py[cod]
 *$py.class
@@ -54,6 +54,7 @@ coverage.xml
 *.log
 local_settings.py
 db.sqlite3
+db.sqlite3-journal
 
 # Flask stuff:
 instance/
@@ -78,11 +79,11 @@ ipython_config.py
 # pyenv
 .python-version
 
-# celery beat schedule file
-celerybeat-schedule
+# pipenv
+Pipfile.lock
 
-# SageMath parsed files
-*.sage.py
+# Poetry
+poetry.lock
 
 # Environments
 .env
@@ -111,7 +112,7 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# VSCode
+# VS Code
 .vscode/
 *.code-workspace
 
@@ -126,27 +127,66 @@ dmypy.json
 .AppleDouble
 .LSOverride
 ._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
 
 # Project specific
-scans/
+scans/*
+!scans/.gitkeep
 *.jpg
+*.jpeg
 *.png
+*.gif
 *.tif
 *.tiff
 *.bmp
-*.gif
-*.weights
-*.onnx
-*.pt
-*.pth
-*.h5
-*.pb
-*.pkl
-*.hdf5
-!docs/*.jpg
-!docs/*.png
+!docs/images/*.jpg
+!docs/images/*.png
 !train_data/**/*.jpg
 !train_data/**/*.png
+
+# ML models and large files
+*.h5
+*.hdf5
+*.pkl
+*.joblib
+*.pt
+*.pth
+*.onnx
+*.pb
+*.tflite
+*.mlmodel
+*.weights
+checkpoints/
+models/weights/
+train_data/raw/
 
 # Tesseract related
 tessdata/
@@ -155,5 +195,6 @@ tessdata/
 logs/
 *.log
 
-# Model checkpoints
-checkpoints/
+# Temporary files
+tmp/
+temp/

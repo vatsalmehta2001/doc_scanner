@@ -18,6 +18,25 @@ import subprocess
 import platform
 import tempfile
 import shutil
+import argparse
+import threading
+import queue
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+from tqdm import tqdm
+import json
+
+# Make magic import optional
+try:
+    import magic
+    MAGIC_AVAILABLE = True
+except ImportError:
+    MAGIC_AVAILABLE = False
+    print("Warning: python-magic not available. File type detection will be limited.")
+
+from doc_scanner.document import DocumentProcessor
+from doc_scanner.utils import ImageEnhancer, Timer
+from doc_scanner.text_processor import TextProcessor
 
 # Create output directory
 os.makedirs("scans", exist_ok=True)
@@ -604,281 +623,307 @@ def four_point_transform(image, pts):
     return warped
 
 
-def main():
-    """Main function to run the document scanner"""
-    # Check and install dependencies
-    ocr_available = ensure_dependencies()
-    
-    print("\nAdvanced Document Scanner with OCR")
-    print("--------------------------------")
-    print("Press 's' to save the current scan and copy text to clipboard")
-    print("Press 'e' to change enhancement mode (text, bw, inverted, color)")
-    print("Press 'm' to toggle manual capture mode")
-    print("Press '+'/'-' to adjust detection sensitivity")
-    print("Press 'q' to quit")
-    
-    # Initialize camera
-    camera = cv2.VideoCapture(0)
-    
-    # Check if camera opened successfully
-    if not camera.isOpened():
-        print("Error: Could not open camera")
-        return
-    
-    # Set camera resolution
-    camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-    
-    # Variables
-    current_document = None
-    current_corners = None
-    enhancement_mode = "auto"  # Default mode is auto-detection
-    manual_mode = False  # Auto detection by default
-    detection_sensitivity = 0.7  # Default sensitivity (0.0-1.0)
-    status_message = ""
-    last_message_time = 0
-    current_ocr_text = ""
-    
-    try:
-        while True:
-            # Capture frame
-            ret, frame = camera.read()
-            if not ret:
-                print("Error: Could not read frame from camera")
-                break
-            
-            # Detect document in the frame (skip if in manual mode)
-            if not manual_mode:
-                document, corners = detect_document(frame, detection_sensitivity)
-                current_document = document
-                current_corners = corners
-            
-            # Make a copy for drawing
-            display_frame = frame.copy()
-            
-            # If in manual mode, provide guidance for capture
-            if manual_mode:
-                # Draw capture area in the center
-                h, w = display_frame.shape[:2]
-                margin_x = int(w * 0.1)
-                margin_y = int(h * 0.1)
-                cv2.rectangle(display_frame, 
-                            (margin_x, margin_y), 
-                            (w - margin_x, h - margin_y), 
-                            (0, 255, 255), 2)
-                
-                # Add instructions
-                cv2.putText(
-                    display_frame, 
-                    "Manual Mode - Press 's' to capture area", 
-                    (10, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 
-                    0.7, 
-                    (0, 255, 255), 
-                    2
-                )
-            # Otherwise show detected document
-            elif current_corners is not None:
-                cv2.polylines(display_frame, [current_corners], True, (0, 255, 0), 2)
-                
-                # Add a text indicator
-                cv2.putText(
-                    display_frame, 
-                    "Document Detected - Press 's' to save & extract text", 
-                    (10, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 
-                    0.7, 
-                    (0, 255, 0), 
-                    2
-                )
-            
-            # Show current modes and settings
-            cv2.putText(
-                display_frame,
-                f"Enhancement: {enhancement_mode} | {'Manual' if manual_mode else 'Auto'} | Sens: {detection_sensitivity:.1f}",
-                (10, display_frame.shape[0] - 50),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                (255, 255, 255),
-                2
-            )
-            
-            # Show OCR text preview if available (truncated)
-            if current_ocr_text and not manual_mode:
-                # Get first line or truncate
-                if '\n' in current_ocr_text:
-                    preview = current_ocr_text.split('\n')[0] + " ..."
-                else:
-                    preview = (current_ocr_text[:40] + "...") if len(current_ocr_text) > 40 else current_ocr_text
-                    
-                cv2.putText(
-                    display_frame,
-                    f"OCR: {preview}",
-                    (10, display_frame.shape[0] - 80),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
-                    (0, 255, 255),
-                    2
-                )
-            
-            # Show status message for 3 seconds
-            if status_message and time.time() - last_message_time < 3.0:
-                cv2.putText(
-                    display_frame,
-                    status_message,
-                    (10, display_frame.shape[0] - 20),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (255, 255, 255),
-                    2
-                )
-            
-            # Show the frame
-            cv2.imshow("Advanced Document Scanner", display_frame)
-            
-            # Check for key presses
-            key = cv2.waitKey(1) & 0xFF
-            
-            # 's' to save current document or capture manual area
-            if key == ord('s'):
-                if manual_mode:
-                    # In manual mode, capture the center area
-                    h, w = frame.shape[:2]
-                    margin_x = int(w * 0.1)
-                    margin_y = int(h * 0.1)
-                    
-                    current_document = frame[margin_y:h-margin_y, margin_x:w-margin_x].copy()
-                    
-                    # Update status
-                    status_message = "Manual area captured"
-                    last_message_time = time.time()
-                    print(status_message)
-                
-                # Save and process the captured document
-                if current_document is not None:
-                    # Start status message
-                    status_message = "Processing document..."
-                    print(status_message)
-                    
-                    # Update status in the UI
-                    cv2.putText(
-                        display_frame,
-                        status_message,
-                        (10, display_frame.shape[0] - 20),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (255, 255, 255),
-                        2
-                    )
-                    cv2.imshow("Advanced Document Scanner", display_frame)
-                    cv2.waitKey(1)  # Update display
-                    
-                    # Enhance document for display and saving
-                    enhanced = enhance_document_for_display(current_document, enhancement_mode)
-                    
-                    # Extract text if OCR is available
-                    text = None
-                    if ocr_available:
-                        status_message = "Running OCR..."
-                        print(status_message)
-                        
-                        # Update status in the UI
-                        cv2.putText(
-                            display_frame,
-                            status_message,
-                            (10, display_frame.shape[0] - 20),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.7,
-                            (255, 255, 255),
-                            2
-                        )
-                        cv2.imshow("Advanced Document Scanner", display_frame)
-                        cv2.waitKey(1)  # Update display
-                        
-                        text = extract_text_advanced(current_document)
-                        current_ocr_text = text
-                        
-                        if text and text != "No text detected":
-                            # Copy text to clipboard
-                            if copy_to_clipboard(text):
-                                clipboard_status = "Text copied to clipboard"
-                            else:
-                                clipboard_status = "Failed to copy text"
-                                
-                            # Print extracted text
-                            print("\nExtracted Text:")
-                            print("--------------")
-                            print(text)
-                            print("--------------")
-                        else:
-                            clipboard_status = "No text detected"
-                            text = "No text detected"
-                    else:
-                        clipboard_status = "OCR not available"
-                        text = None
-                    
-                    # Generate filename with timestamp
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = f"scans/scan_{timestamp}.jpg"
-                    
-                    # Save the document
-                    cv2.imwrite(filename, enhanced)
-                    
-                    # Also save a text file with the OCR results if text was detected
-                    if text and text != "No text detected" and ocr_available:
-                        text_filename = f"scans/scan_{timestamp}.txt"
-                        with open(text_filename, "w") as f:
-                            f.write(text)
-                    
-                    # Update status message
-                    status_message = f"Saved: {os.path.basename(filename)} - {clipboard_status}"
-                    last_message_time = time.time()
-                    print(status_message)
-                else:
-                    status_message = "No document detected to save"
-                    last_message_time = time.time()
-                    print(status_message)
-            
-            # 'e' to change enhancement mode
-            elif key == ord('e'):
-                modes = ["auto", "text", "bw", "inverted", "color"]
-                current_index = modes.index(enhancement_mode) if enhancement_mode in modes else 0
-                enhancement_mode = modes[(current_index + 1) % len(modes)]
-                status_message = f"Enhancement mode changed to: {enhancement_mode}"
-                last_message_time = time.time()
-                print(status_message)
-            
-            # 'm' to toggle manual mode
-            elif key == ord('m'):
-                manual_mode = not manual_mode
-                status_message = f"Manual mode: {'ON' if manual_mode else 'OFF'}"
-                last_message_time = time.time()
-                print(status_message)
-            
-            # '+' to increase detection sensitivity
-            elif key == ord('+') or key == ord('='):
-                detection_sensitivity = min(1.0, detection_sensitivity + 0.1)
-                status_message = f"Detection sensitivity: {detection_sensitivity:.1f}"
-                last_message_time = time.time()
-                print(status_message)
-            
-            # '-' to decrease detection sensitivity
-            elif key == ord('-'):
-                detection_sensitivity = max(0.1, detection_sensitivity - 0.1)
-                status_message = f"Detection sensitivity: {detection_sensitivity:.1f}"
-                last_message_time = time.time()
-                print(status_message)
-            
-            # 'q' to quit
-            elif key == ord('q'):
-                break
-                
-    finally:
-        # Clean up resources
-        camera.release()
+class AdvancedDocumentScanner:
+    def __init__(self, output_dir: str = "scanned_documents"):
+        """Initialize the advanced document scanner"""
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Initialize components
+        self.doc_processor = DocumentProcessor()
+        self.image_enhancer = ImageEnhancer()
+        self.text_processor = TextProcessor()
+        
+        # Initialize camera
+        self.camera = None
+        self.frame_queue = queue.Queue(maxsize=2)
+        self.processing_queue = queue.Queue(maxsize=10)
+        self.is_running = False
+        
+        # Processing settings
+        self.auto_capture = False
+        self.show_preview = True
+        self.current_mode = "normal"  # normal, hdr, text
+        
+        # Initialize timer
+        self.timer = Timer()
+        
+    def start(self):
+        """Start the document scanner"""
+        self.is_running = True
+        
+        # Start camera thread
+        self.camera_thread = threading.Thread(target=self._camera_loop)
+        self.camera_thread.start()
+        
+        # Start processing thread
+        self.processing_thread = threading.Thread(target=self._processing_loop)
+        self.processing_thread.start()
+        
+        # Start UI loop
+        self._ui_loop()
+        
+    def stop(self):
+        """Stop the document scanner"""
+        self.is_running = False
+        if self.camera_thread:
+            self.camera_thread.join()
+        if self.processing_thread:
+            self.processing_thread.join()
+        if self.camera:
+            self.camera.release()
         cv2.destroyAllWindows()
-        print("Document Scanner closed")
+        
+    def _camera_loop(self):
+        """Camera capture loop"""
+        self.camera = cv2.VideoCapture(0)
+        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+        
+        while self.is_running:
+            ret, frame = self.camera.read()
+            if not ret:
+                continue
+                
+            # Put frame in queue, skip if full
+            try:
+                self.frame_queue.put(frame, block=False)
+            except queue.Full:
+                continue
+                
+    def _processing_loop(self):
+        """Main processing loop"""
+        while self.is_running:
+            try:
+                frame = self.frame_queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
+                
+            # Process frame
+            processed_frame = self._process_frame(frame)
+            
+            # Put in processing queue for UI
+            try:
+                self.processing_queue.put(processed_frame, block=False)
+            except queue.Full:
+                continue
+                
+    def _process_frame(self, frame: np.ndarray) -> Dict:
+        """Process a single frame"""
+        self.timer.start()
+        
+        # Detect document
+        corners = self.doc_processor.detect_document_corners(frame)
+        
+        result = {
+            'frame': frame,
+            'corners': corners,
+            'processing_time': self.timer.stop()
+        }
+        
+        if corners is not None:
+            # Transform document
+            warped = self.doc_processor.four_point_transform(frame, corners)
+            
+            # Enhance based on mode
+            if self.current_mode == "hdr":
+                enhanced = self._apply_hdr_enhancement(warped)
+            elif self.current_mode == "text":
+                enhanced = self._optimize_for_text(warped)
+            else:
+                enhanced = self.image_enhancer.enhance(warped)
+                
+            result['warped'] = warped
+            result['enhanced'] = enhanced
+            
+            # Auto-capture if enabled and good quality
+            if self.auto_capture and self._check_quality(enhanced):
+                self._save_document(enhanced)
+                
+        return result
+    
+    def _apply_hdr_enhancement(self, image: np.ndarray) -> np.ndarray:
+        """Apply HDR-like enhancement"""
+        # Convert to LAB
+        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        
+        # Apply CLAHE to L channel
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+        l = clahe.apply(l)
+        
+        # Merge channels
+        lab = cv2.merge([l, a, b])
+        enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+        
+        # Apply additional contrast enhancement
+        enhanced = cv2.addWeighted(enhanced, 1.2, enhanced, 0, 0)
+        
+        return enhanced
+    
+    def _optimize_for_text(self, image: np.ndarray) -> np.ndarray:
+        """Optimize image for text recognition"""
+        # Convert to grayscale
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        # Increase contrast
+        gray = cv2.convertScaleAbs(gray, alpha=1.3, beta=0)
+        
+        # Apply adaptive threshold with optimized parameters
+        binary = cv2.adaptiveThreshold(
+            gray,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            11,
+            2
+        )
+        
+        # Remove noise while preserving text
+        denoised = cv2.fastNlMeansDenoising(binary, None, 10, 7, 21)
+        
+        # Ensure black text on white background
+        if np.mean(denoised) < 127:
+            denoised = cv2.bitwise_not(denoised)
+        
+        return denoised
+    
+    def _check_quality(self, image: np.ndarray) -> bool:
+        """Check if image quality is good enough for capture"""
+        # Convert to grayscale
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        # Calculate image quality metrics
+        blur = cv2.Laplacian(gray, cv2.CV_64F).var()
+        brightness = np.mean(gray)
+        contrast = np.std(gray)
+        
+        # Define quality thresholds
+        return (blur > 100 and  # Not too blurry
+                20 < brightness < 235 and  # Good brightness
+                contrast > 40)  # Good contrast
+    
+    def _save_document(self, image: np.ndarray):
+        """Save processed document"""
+        try:
+            # Generate filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = self.output_dir / f"doc_{timestamp}.png"
+            
+            # Save image with high quality
+            cv2.imwrite(str(filename), image, [cv2.IMWRITE_PNG_COMPRESSION, 0])
+            print(f"\nSaved document image: {filename}")
+            
+            # Optimize image for text extraction
+            ocr_image = self._optimize_for_text(image.copy())
+            
+            # Extract text with higher quality settings
+            text_data = self.text_processor.extract_text(ocr_image)
+            
+            # Save text if we got meaningful content
+            if text_data['full_text'].strip():
+                text_file = filename.with_suffix('.txt')
+                with open(text_file, 'w') as f:
+                    f.write(text_data['full_text'])
+                print(f"Saved extracted text: {text_file}")
+                
+                # Save structured data if we found any
+                has_data = any(len(v) > 0 for v in text_data['structured_data'].values())
+                if has_data:
+                    struct_file = filename.with_suffix('.json')
+                    with open(struct_file, 'w') as f:
+                        json.dump(text_data['structured_data'], f, indent=2)
+                    print(f"Saved structured data: {struct_file}")
+                
+                print(f"\nExtracted text preview:")
+                preview = text_data['full_text'][:200] + "..." if len(text_data['full_text']) > 200 else text_data['full_text']
+                print(preview)
+            else:
+                print("No text could be extracted from the document")
+                
+        except Exception as e:
+            print(f"Error saving document: {str(e)}")
+    
+    def _ui_loop(self):
+        """Main UI loop"""
+        window_name = "Advanced Document Scanner"
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        
+        while self.is_running:
+            try:
+                result = self.processing_queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
+                
+            # Prepare display frame
+            display_frame = result['frame'].copy()
+            
+            # Draw document corners if detected
+            if result['corners'] is not None:
+                corners = result['corners'].astype(np.int32)
+                cv2.polylines(
+                    display_frame,
+                    [corners],
+                    True,
+                    (0, 255, 0),
+                    2
+                )
+                
+                # Show processing time
+                cv2.putText(
+                    display_frame,
+                    f"Processing: {result['processing_time']:.1f}ms",
+                    (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1,
+                    (0, 255, 0),
+                    2
+                )
+                
+                # Show enhanced view if available
+                if 'enhanced' in result:
+                    cv2.imshow("Enhanced View", result['enhanced'])
+            
+            # Show main frame
+            cv2.imshow(window_name, display_frame)
+            
+            # Handle keyboard input
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
+                self.is_running = False
+            elif key == ord('c'):
+                if 'enhanced' in result:
+                    self._save_document(result['enhanced'])
+            elif key == ord('m'):
+                self._cycle_mode()
+            elif key == ord('a'):
+                self.auto_capture = not self.auto_capture
+            elif key == ord('p'):
+                self.show_preview = not self.show_preview
+    
+    def _cycle_mode(self):
+        """Cycle through different processing modes"""
+        modes = ["normal", "hdr", "text"]
+        current_idx = modes.index(self.current_mode)
+        self.current_mode = modes[(current_idx + 1) % len(modes)]
+        print(f"Switched to {self.current_mode} mode")
 
+def main():
+    parser = argparse.ArgumentParser(description="Advanced Document Scanner")
+    parser.add_argument(
+        "--output",
+        default="scanned_documents",
+        help="Output directory for scanned documents"
+    )
+    args = parser.parse_args()
+    
+    scanner = AdvancedDocumentScanner(args.output)
+    try:
+        scanner.start()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        scanner.stop()
 
 if __name__ == "__main__":
     main()

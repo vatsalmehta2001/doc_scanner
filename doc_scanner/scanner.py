@@ -14,17 +14,24 @@ import numpy as np
 import threading
 import queue
 import platform
+from typing import Tuple, Optional, List
+import math
+from concurrent.futures import ThreadPoolExecutor
 
 from .document import (
     detect_document, 
     enhance_document, 
-    estimate_document_type
+    estimate_document_type,
+    DocumentProcessor
 )
 from .utils import (
     ensure_directory, 
     display_macos_camera_permission_help, 
-    display_apple_silicon_tips
+    display_apple_silicon_tips,
+    Timer,
+    ImageEnhancer
 )
+from .text_processor import TextProcessor
 
 
 class EnhancedDocumentScanner:
@@ -61,6 +68,12 @@ class EnhancedDocumentScanner:
         
         # Ensure output directory exists
         ensure_directory(output_dir)
+        
+        self.doc_processor = DocumentProcessor()
+        self.image_enhancer = ImageEnhancer()
+        self.text_processor = TextProcessor()
+        self.executor = ThreadPoolExecutor(max_workers=2)
+        self.processing_timer = Timer()
         
     def initialize_camera(self):
         """Initialize camera with OpenCV"""
@@ -173,6 +186,101 @@ class EnhancedDocumentScanner:
         current_index = modes.index(self.preview_mode)
         self.preview_mode = modes[(current_index + 1) % len(modes)]
         self.status_message = f"Preview mode: {self.preview_mode}"
+    
+    def process_document(self, image: np.ndarray) -> Tuple[np.ndarray, dict]:
+        """
+        Process a document image with advanced enhancements
+        
+        Args:
+            image: Input image
+            
+        Returns:
+            Tuple of (processed_image, metadata)
+        """
+        # Start timing
+        self.processing_timer.start()
+        
+        # Auto-rotate document if needed
+        angle = self._detect_rotation(image)
+        if abs(angle) > 0.5:
+            image = self._rotate_image(image, angle)
+            
+        # Detect and refine document boundaries
+        corners = self.doc_processor.detect_document_corners(image)
+        if corners is not None:
+            # Apply perspective transform
+            image = self.doc_processor.four_point_transform(image, corners)
+            
+        # Remove glare and shadows
+        image = self._remove_glare_and_shadows(image)
+        
+        # Enhance image quality
+        enhanced = self.image_enhancer.enhance(image)
+        
+        # Process text if needed
+        text_data = self.text_processor.extract_text(enhanced)
+        
+        metadata = {
+            'processing_time': self.processing_timer.stop(),
+            'rotation_angle': angle,
+            'text_data': text_data,
+            'document_size': image.shape[:2]
+        }
+        
+        return enhanced, metadata
+    
+    def _detect_rotation(self, image: np.ndarray) -> float:
+        """Detect document rotation angle"""
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 50, 150, apertureSize=3)
+        lines = cv2.HoughLines(edges, 1, np.pi/180, 200)
+        
+        if lines is not None:
+            angles = []
+            for rho, theta in lines[:, 0]:
+                angle = np.degrees(theta) % 180
+                if 45 <= angle <= 135:
+                    angles.append(angle - 90)
+                else:
+                    angles.append(angle)
+            
+            # Use median angle to avoid outliers
+            return np.median(angles) if angles else 0.0
+        return 0.0
+    
+    def _rotate_image(self, image: np.ndarray, angle: float) -> np.ndarray:
+        """Rotate image by given angle"""
+        (h, w) = image.shape[:2]
+        center = (w // 2, h // 2)
+        M = cv2.getRotationMatrix2D(center, angle, 1.0)
+        return cv2.warpAffine(image, M, (w, h), 
+                            flags=cv2.INTER_CUBIC,
+                            borderMode=cv2.BORDER_REPLICATE)
+    
+    def _remove_glare_and_shadows(self, image: np.ndarray) -> np.ndarray:
+        """Remove glare and shadows from document image"""
+        # Convert to LAB color space
+        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        
+        # Apply CLAHE to L channel
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+        l = clahe.apply(l)
+        
+        # Merge channels
+        lab = cv2.merge([l, a, b])
+        
+        # Convert back to BGR
+        enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+        
+        # Apply bilateral filter to reduce noise while preserving edges
+        enhanced = cv2.bilateralFilter(enhanced, 9, 75, 75)
+        
+        return enhanced
+    
+    def process_batch(self, images: List[np.ndarray]) -> List[Tuple[np.ndarray, dict]]:
+        """Process multiple documents in parallel"""
+        return list(self.executor.map(self.process_document, images))
     
     def run(self):
         """Run the document scanner application"""
@@ -326,6 +434,9 @@ class EnhancedDocumentScanner:
                 
             cv2.destroyAllWindows()
             print("Document Scanner closed")
+
+    def __del__(self):
+        self.executor.shutdown()
 
 
 def main():

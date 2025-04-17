@@ -1,104 +1,93 @@
-Let's build your portfolio-ready project one file at a time, starting with the most important components. I'll guide you through each step to enhance your document scanner with machine learning features.
+# Document Scanner
 
-## Step 1: Create a Professional README.md
-
-Let's begin with a comprehensive README that showcases your project:
-
-```markdown
-# ML-Enhanced Document Scanner
-
-A machine learning-powered document scanner that uses computer vision and OCR to detect, capture, enhance, and extract text from physical documents using a webcam.
-
-![Document Scanner Demo](docs/demo_screenshot.png)
+A powerful document scanning application that uses computer vision and OCR to capture, process, and extract text from documents.
 
 ## Features
 
-- **Intelligent Document Detection**: Automatically identifies and captures documents in real-time
-- **ML-Based Document Classification**: Identifies document types (text document, ID card, receipt, etc.)
-- **Advanced OCR Processing**: Extracts text even from challenging documents with dark backgrounds
-- **Multiple Enhancement Modes**: Optimizes images for different document types
-- **Perspective Correction**: Automatically straightens and crops documents
-- **Real-time Text Extraction**: Copies detected text to clipboard
-- **Optimized for Apple Silicon**: Fully compatible with M-series Macs
-
-## Demo
-
-[View Demo Video](https://example.com/demo-video)
+- Real-time document edge detection
+- Automatic perspective correction
+- High-quality image capture and processing
+- OCR text extraction with multiple PSM modes
+- Structured data extraction (dates, emails, phone numbers, etc.)
+- Support for various document types
+- Console feedback and debugging information
 
 ## Installation
 
+1. Clone the repository:
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/ml-document-scanner.git
-cd ml-document-scanner
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install Tesseract OCR engine (required for text extraction)
-# macOS:
-brew install tesseract
-# Ubuntu:
-# sudo apt install tesseract-ocr
+git clone https://github.com/YOUR_USERNAME/doc_scanner.git
+cd doc_scanner
 ```
+
+2. Install dependencies:
+```bash
+pip install -e .
+```
+
+3. Make sure you have Tesseract OCR installed:
+- macOS: `brew install tesseract`
+- Linux: `sudo apt-get install tesseract-ocr`
+- Windows: Download installer from [GitHub](https://github.com/UB-Mannheim/tesseract/wiki)
 
 ## Usage
 
+1. Run the document scanner:
 ```bash
-# Run the advanced scanner with ML features
-python advanced_scanner.py
-
-# Run the simple version for quick document scans
-python simple_scanner.py
+python scripts/advanced_scanner.py
 ```
 
-### Controls
+2. Controls:
+- Press 'c' to capture a document
+- Press 'q' to quit
+- Press 'h' for help
 
-- **s**: Save document and extract text
-- **e**: Toggle enhancement modes
-- **c**: Toggle document classification
-- **m**: Toggle manual capture mode
-- **+/-**: Adjust detection sensitivity
-- **q**: Quit
+3. The captured documents will be saved in the `scanned_documents` directory with:
+- PNG image file
+- TXT file with extracted text
+- JSON file with structured data
 
 ## Project Structure
 
 ```
-├── models/              # ML models for document analysis
-├── doc_scanner/         # Core scanner functionality
-├── notebooks/           # Jupyter notebooks for analysis
-├── demo/                # Demo files and examples
-├── docs/                # Documentation
-└── tests/               # Test suite
+doc_scanner/
+├── doc_scanner/           # Main package
+│   ├── __init__.py
+│   ├── document.py       # Document processing
+│   ├── scanner.py        # Scanner implementation
+│   └── text_processor.py # Text extraction
+├── scripts/              # Command-line tools
+│   └── advanced_scanner.py
+├── tests/               # Test suite
+│   ├── __init__.py
+│   └── test_*.py
+├── scanned_documents/   # Output directory
+├── requirements.txt     # Dependencies
+├── setup.py            # Package configuration
+├── LICENSE             # License information
+└── README.md          # This file
 ```
 
-## Technical Overview
+## Development
 
-This project combines classical computer vision techniques with machine learning to create a powerful document processing pipeline:
+1. Install development dependencies:
+```bash
+pip install -e ".[dev]"
+```
 
-1. **Document Detection**: Adaptive edge detection and contour analysis
-2. **Image Enhancement**: Specialized processing for various document types
-3. **Text Extraction**: Multi-stage OCR with preprocessing optimizations
-4. **Document Classification**: ML model to identify document types
-5. **Text Analysis**: Extract structured information from document text
+2. Run tests:
+```bash
+pytest tests/
+```
 
-## ML Components
+## Contributing
 
-- Document type classifier (CNN-based)
-- Image quality enhancement model
-- Text structure analyzer
-
-## Technology Stack
-
-- Python 3.8+
-- OpenCV for computer vision
-- Tesseract for OCR
-- TensorFlow/Keras for ML models
-- NumPy and SciPy for numerical processing
-- Matplotlib for visualization
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
-MIT
-
-## Author
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

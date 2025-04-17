@@ -6,6 +6,8 @@ Handles document detection, enhancement, and classification
 import cv2
 import numpy as np
 import os
+from typing import List, Optional, Tuple, Dict
+import math
 
 # Import ML models if available
 try:
@@ -359,3 +361,229 @@ def _rule_based_classification(image):
             return "form"
         else:
             return "text_document"
+
+class DocumentProcessor:
+    def __init__(self):
+        self.min_contour_area = 5000  # Minimum contour area to be considered a document
+        self.angle_threshold = 1.0     # Maximum angle deviation for alignment
+        
+    def detect_document_corners(self, image: np.ndarray) -> Optional[np.ndarray]:
+        """
+        Detect document corners in the image using advanced techniques
+        
+        Args:
+            image: Input image
+            
+        Returns:
+            Array of corner points or None if no document detected
+        """
+        # Convert to grayscale
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        # Apply bilateral filter to reduce noise while preserving edges
+        blurred = cv2.bilateralFilter(gray, 9, 75, 75)
+        
+        # Apply adaptive thresholding
+        thresh = cv2.adaptiveThreshold(
+            blurred,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            11,
+            2
+        )
+        
+        # Find edges
+        edges = cv2.Canny(thresh, 50, 200, apertureSize=3)
+        
+        # Dilate edges to connect components
+        kernel = np.ones((3,3), np.uint8)
+        dilated = cv2.dilate(edges, kernel, iterations=1)
+        
+        # Find contours
+        contours, _ = cv2.findContours(
+            dilated,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE
+        )
+        
+        if not contours:
+            return None
+            
+        # Find the largest contour
+        largest_contour = max(contours, key=cv2.contourArea)
+        
+        if cv2.contourArea(largest_contour) < self.min_contour_area:
+            return None
+            
+        # Approximate the contour
+        epsilon = 0.02 * cv2.arcLength(largest_contour, True)
+        approx = cv2.approxPolyDP(largest_contour, epsilon, True)
+        
+        # If we have a quadrilateral
+        if len(approx) == 4:
+            corners = self._order_points(approx.reshape(4, 2))
+            return self._refine_corners(corners, edges)
+        
+        return None
+    
+    def _order_points(self, pts: np.ndarray) -> np.ndarray:
+        """Order points in clockwise order starting from top-left"""
+        rect = np.zeros((4, 2), dtype=np.float32)
+        
+        # Top-left will have smallest sum
+        # Bottom-right will have largest sum
+        s = pts.sum(axis=1)
+        rect[0] = pts[np.argmin(s)]
+        rect[2] = pts[np.argmax(s)]
+        
+        # Top-right will have smallest difference
+        # Bottom-left will have largest difference
+        diff = np.diff(pts, axis=1)
+        rect[1] = pts[np.argmin(diff)]
+        rect[3] = pts[np.argmax(diff)]
+        
+        return rect
+    
+    def _refine_corners(self, corners: np.ndarray, edges: np.ndarray) -> np.ndarray:
+        """Refine corner positions using edge information"""
+        refined_corners = corners.copy()
+        
+        for i, corner in enumerate(corners):
+            x, y = int(corner[0]), int(corner[1])
+            
+            # Define search region
+            region_size = 10
+            x_start = max(0, x - region_size)
+            x_end = min(edges.shape[1], x + region_size)
+            y_start = max(0, y - region_size)
+            y_end = min(edges.shape[0], y + region_size)
+            
+            # Extract region around corner
+            region = edges[y_start:y_end, x_start:x_end]
+            
+            # Find strongest edge point
+            y_coords, x_coords = np.nonzero(region)
+            
+            if len(x_coords) > 0:
+                # Calculate distances to current corner
+                distances = np.sqrt(
+                    (x_coords - region_size) ** 2 +
+                    (y_coords - region_size) ** 2
+                )
+                
+                # Find closest edge point
+                closest_idx = np.argmin(distances)
+                refined_corners[i] = [
+                    x_start + x_coords[closest_idx],
+                    y_start + y_coords[closest_idx]
+                ]
+        
+        return refined_corners
+    
+    def four_point_transform(self, image: np.ndarray, pts: np.ndarray) -> np.ndarray:
+        """Apply perspective transform to obtain top-down view"""
+        rect = pts.astype(np.float32)
+        
+        # Compute width of new image
+        widthA = np.sqrt(((rect[2][0] - rect[3][0]) ** 2) + ((rect[2][1] - rect[3][1]) ** 2))
+        widthB = np.sqrt(((rect[1][0] - rect[0][0]) ** 2) + ((rect[1][1] - rect[0][1]) ** 2))
+        maxWidth = max(int(widthA), int(widthB))
+        
+        # Compute height of new image
+        heightA = np.sqrt(((rect[1][0] - rect[2][0]) ** 2) + ((rect[1][1] - rect[2][1]) ** 2))
+        heightB = np.sqrt(((rect[0][0] - rect[3][0]) ** 2) + ((rect[0][1] - rect[3][1]) ** 2))
+        maxHeight = max(int(heightA), int(heightB))
+        
+        # Construct destination points
+        dst = np.array([
+            [0, 0],
+            [maxWidth - 1, 0],
+            [maxWidth - 1, maxHeight - 1],
+            [0, maxHeight - 1]
+        ], dtype=np.float32)
+        
+        # Calculate perspective transform matrix
+        M = cv2.getPerspectiveTransform(rect, dst)
+        
+        # Apply perspective transform
+        warped = cv2.warpPerspective(image, M, (maxWidth, maxHeight))
+        
+        return warped
+    
+    def estimate_document_type(self, image: np.ndarray) -> Dict:
+        """
+        Estimate document type based on visual features
+        
+        Args:
+            image: Input document image
+            
+        Returns:
+            Dictionary with document type and confidence score
+        """
+        # Convert to grayscale
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        # Calculate features
+        aspect_ratio = image.shape[1] / image.shape[0]
+        text_density = self._calculate_text_density(gray)
+        edge_density = self._calculate_edge_density(gray)
+        
+        # Simple rule-based classification
+        if aspect_ratio > 1.4:  # Wide format
+            if text_density > 0.15:
+                doc_type = 'letter'
+                confidence = 0.8
+            else:
+                doc_type = 'receipt'
+                confidence = 0.7
+        else:  # Portrait format
+            if edge_density > 0.1:
+                if text_density > 0.2:
+                    doc_type = 'form'
+                    confidence = 0.75
+                else:
+                    doc_type = 'id_card'
+                    confidence = 0.85
+            else:
+                doc_type = 'photo'
+                confidence = 0.9
+        
+        return {
+            'type': doc_type,
+            'confidence': confidence,
+            'features': {
+                'aspect_ratio': aspect_ratio,
+                'text_density': text_density,
+                'edge_density': edge_density
+            }
+        }
+    
+    def _calculate_text_density(self, gray: np.ndarray) -> float:
+        """Calculate approximate text density in image"""
+        # Apply adaptive threshold
+        thresh = cv2.adaptiveThreshold(
+            gray,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY_INV,
+            11,
+            2
+        )
+        
+        # Count potential text pixels
+        text_pixels = np.count_nonzero(thresh)
+        total_pixels = thresh.size
+        
+        return text_pixels / total_pixels
+    
+    def _calculate_edge_density(self, gray: np.ndarray) -> float:
+        """Calculate edge density in image"""
+        # Apply Canny edge detection
+        edges = cv2.Canny(gray, 50, 150)
+        
+        # Calculate density
+        edge_pixels = np.count_nonzero(edges)
+        total_pixels = edges.size
+        
+        return edge_pixels / total_pixels

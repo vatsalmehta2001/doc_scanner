@@ -6,6 +6,10 @@ import os
 import sys
 import platform
 import subprocess
+import cv2
+import numpy as np
+import time
+from typing import Optional, Tuple
 
 
 def ensure_directory(directory):
@@ -64,35 +68,116 @@ def check_opencv_version():
 
 
 def display_apple_silicon_tips():
-    """Display tips for running on Apple Silicon Macs"""
-    info = get_system_info()
-    
-    if info["is_apple_silicon"]:
-        cv_version, cv_compatible = check_opencv_version()
-        
-        print("\nApple Silicon (M-series) Compatibility Info:")
-        print("-------------------------------------------")
-        print(f"• System: {info['platform']}")
-        print(f"• Python version: {info['python_version']}")
-        print(f"• Architecture: {info['architecture']}")
-        print(f"• OpenCV version: {cv_version}")
-        print(f"• OpenCV compatibility: {'Good' if cv_compatible else 'May need update'}")
-        
-        if not cv_compatible:
-            print("\nTip: For better performance on Apple Silicon, install the latest OpenCV:")
-            print("  pip uninstall opencv-python -y")
-            print("  pip install --no-binary :all: opencv-python")
-    
-    return info["is_apple_silicon"]
+    """Display tips for Apple Silicon users"""
+    print("Running on Apple Silicon Mac. For best performance:")
+    print("1. Use native ARM64 Python and packages")
+    print("2. Ensure OpenCV is compiled for ARM64")
 
 
 def display_macos_camera_permission_help():
     """Display help for macOS camera permissions"""
-    if platform.system() == "Darwin":  # macOS
-        print("\nCamera Permission Guide for macOS:")
-        print("--------------------------------")
-        print("1. Open System Settings > Privacy & Security > Camera")
-        print("2. Ensure Terminal, VS Code, and/or your Python environment have permission")
-        print("3. After granting permission, restart your terminal or VS Code")
-        print("4. If issues persist, try running the app from Terminal directly:")
-        print("   python -m doc_scanner.scanner")
+    print("Camera access is required for document scanning.")
+    print("Please grant camera permission in System Preferences > Security & Privacy > Camera")
+
+
+class Timer:
+    def __init__(self):
+        self.start_time = None
+        
+    def start(self):
+        self.start_time = time.time()
+        
+    def stop(self) -> float:
+        if self.start_time is None:
+            return 0.0
+        elapsed = time.time() - self.start_time
+        self.start_time = None
+        return elapsed
+
+
+class ImageEnhancer:
+    def __init__(self):
+        self.denoise_strength = 10
+        self.sharpness = 1.5
+        
+    def enhance(self, image: np.ndarray) -> np.ndarray:
+        """Apply comprehensive image enhancement"""
+        # Denoise
+        denoised = self._apply_denoising(image)
+        
+        # Color correction
+        color_corrected = self._apply_color_correction(denoised)
+        
+        # Contrast enhancement
+        contrast_enhanced = self._enhance_contrast(color_corrected)
+        
+        # Sharpen
+        sharpened = self._sharpen_image(contrast_enhanced)
+        
+        return sharpened
+    
+    def _apply_denoising(self, image: np.ndarray) -> np.ndarray:
+        """Apply sophisticated denoising"""
+        # Use FastNL Means Denoising
+        return cv2.fastNlMeansDenoisingColored(
+            image,
+            None,
+            h=self.denoise_strength,
+            hColor=10,
+            templateWindowSize=7,
+            searchWindowSize=21
+        )
+    
+    def _apply_color_correction(self, image: np.ndarray) -> np.ndarray:
+        """Apply automatic color correction"""
+        # Convert to LAB color space
+        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        
+        # Apply CLAHE to L channel
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        l = clahe.apply(l)
+        
+        # Auto white balance
+        a = self._normalize_channel(a)
+        b = self._normalize_channel(b)
+        
+        # Merge channels
+        lab = cv2.merge([l, a, b])
+        
+        return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+    
+    def _normalize_channel(self, channel: np.ndarray) -> np.ndarray:
+        """Normalize color channel"""
+        mean = np.mean(channel)
+        std = np.std(channel)
+        channel = (channel - mean) * (1 + std/128) + mean
+        return np.clip(channel, 0, 255).astype(np.uint8)
+    
+    def _enhance_contrast(self, image: np.ndarray) -> np.ndarray:
+        """Enhance image contrast"""
+        # Convert to YUV
+        yuv = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
+        y, u, v = cv2.split(yuv)
+        
+        # Apply adaptive histogram equalization to Y channel
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        y = clahe.apply(y)
+        
+        # Merge channels
+        yuv = cv2.merge([y, u, v])
+        
+        return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
+    
+    def _sharpen_image(self, image: np.ndarray) -> np.ndarray:
+        """Apply intelligent sharpening"""
+        # Create sharpening kernel
+        kernel = np.array([[-1,-1,-1],
+                         [-1, 9,-1],
+                         [-1,-1,-1]]) / (self.sharpness * 5)
+        
+        # Apply kernel
+        sharpened = cv2.filter2D(image, -1, kernel)
+        
+        # Blend with original to prevent over-sharpening
+        return cv2.addWeighted(image, 0.55, sharpened, 0.45, 0)
